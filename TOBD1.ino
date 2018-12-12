@@ -10,6 +10,10 @@
 #include <SPI.h>
 #include <EEPROM.h>
 #include <MD_KeySwitch.h>
+#define SDCARD //закомментировать если не нужен функционал логирования на SD карту.
+               //обязательно закомментировать если не подключен SD модуль. Иначе программа будет не стартовать.
+               
+
 
 //#define LOGGING_FULL    //Запись на SD всех данных
 #define DEBUG_OUTPUT true // for debug option - swith output to Serial
@@ -19,16 +23,20 @@
 #define ENGINE_DATA_PIN 2 //VF1 PIN
 #define TOGGLE_BTN_PIN 4 //screen change PIN
 #define INJECTOR_PIN 3 // Номер ноги для форсунки
+
+#if defined(SDCARD) //DEFINE модуля записи на SD карту
 #define SS 5 // Номер ноги SS SD модуля
+#define FILE_BASE_NAME "Data"   //шаблон имени файла
+#define error(msg) sd.errorHalt(F(msg)) //ошибки при работе с SD
+#endif
 
 //DEFINE констант расходомера
 #define Ls 0.003965888 //производительсность форсунки литров в секунду // базовый 0.004 или 240cc
-
 #define Ncyl 6 //кол-во цилиндров
 
-//DEFINE модуля записи на SD карту
-#define FILE_BASE_NAME "Data"   //шаблон имени файла
-#define error(msg) sd.errorHalt(F(msg)) //ошибки при работе с SD
+
+
+
 
 //DEFINE OBD READER
 #define  MY_HIGH  HIGH //LOW    // I have inverted the Eng line using an Opto-Coupler, if yours isn't then reverse these low & high defines.
@@ -47,9 +55,10 @@
 
 
 U8GLIB_SSD1306_128X64 u8g(U8G_I2C_OPT_NONE);
-
+#if defined(SDCARD)
 SdFat sd;
 SdFile file;
+#endif
 
 MD_KeySwitch S(TOGGLE_BTN_PIN, HIGH);
 byte CurrentDisplayIDX = 1;
@@ -80,8 +89,10 @@ boolean LoggingOn = false; // dfeine connection flag and last success packet - f
 
 
 void setup() {
+  #if defined(SDCARD)
   char fileName[13] = FILE_BASE_NAME "00.csv";
   const uint8_t BASE_NAME_SIZE = sizeof(FILE_BASE_NAME) - 1;
+  #endif
   noInterrupts();
   Serial.begin(115200);
   EEPROM.get(104, total_run);
@@ -106,7 +117,7 @@ void setup() {
     Serial.println(total_duration_inj, 3);
     //   Serial.println(total_obd_inj_dur_ee, 3);
   }
-
+#if defined(SDCARD)
   if (!sd.begin(SS, SD_SCK_MHZ(50))) {
     sd.initErrorHalt();
   }
@@ -126,6 +137,7 @@ void setup() {
     error("file.open");
   }
   writeHeader();
+#endif
   // set and initialize the TIMER1
   TCCR1A = 0; // set entire TCCR1A register to 0
   TCCR1B = 0; // set entire TCCR1B register to 0
@@ -205,9 +217,11 @@ void loop(void) {
     flagNulSpeed = true;                                  //запрет повторной записи
   }
   if (getOBDdata(OBD_SPD) != 0) flagNulSpeed = false;     //начали двигаться - разрешаем запись
+#if defined(SDCARD)
   if (millis() % 500 < 50 && LoggingOn == true) {         //каждую 0.5с запись в лог данных по двоному нажатию на кнопку
     logData();
   }
+  #endif
   //  if (millis() % 5000 < 50) autoscreenchange();      // ротация экранов
 }
 
@@ -226,6 +240,7 @@ void cleardata() {
   // EEPROM.get(208, total_closed_duration);
 
 }
+#if defined(SDCARD)
 void writeHeader() {
 #ifdef LOGGING_FULL
   file.print(F("INJ_OBD;INJ_HW;IGN;IAC;RPM;MAP;ECT;TPS;SPD;OXSENS;ASE;COLD;DET;OXf;Re-ENRICHMENT;STARTER;IDLE;A/C;NEUTRAL;Ex1;Ex2;AVG SPD;LPK_OBD;LPH_OBD;LPH_INJ;TOTAL_OBD;TOTAL_INJ;AVG_OBD;AVG_INJ"));
@@ -260,6 +275,7 @@ void logData() {
   file.println();
   if (!file.sync() || file.getWriteError())  error("write error");
 }
+#endif
 
 void InjectorTime() { // it is called every time a change occurs at the gasoline injector signal and calculates gasoline injector opening time, during the 1sec interval
   if (digitalRead(INJECTOR_PIN) == LOW) {
@@ -707,4 +723,3 @@ void ChangeState() {
   }
 
 */
-
