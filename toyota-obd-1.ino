@@ -310,8 +310,8 @@ void drawScreenSelector(void) {
   else if (CurrentDisplayIDX == 2) DrawTotalFuelConsuption();
   else if (CurrentDisplayIDX == 3) drawTimeDistance();
   else if (CurrentDisplayIDX == 4) drawAllData();
-  else if (CurrentDisplayIDX == 5) void drawExtraData();
-  else if (CurrentDisplayIDX == 6) void drawExtraFlags();
+  else if (CurrentDisplayIDX == 5) drawExtraData();
+  else if (CurrentDisplayIDX == 6) drawExtraFlags();
 } // end drawScreenSelector()
 
 void DrawCurrentFuelConsuption(void) {
