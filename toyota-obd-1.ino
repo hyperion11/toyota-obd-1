@@ -15,7 +15,8 @@
 
 //#define LOGGING_FULL    //Запись на SD всех данных
 #define DEBUG_OUTPUT true // for debug option - swith output to Serial
-
+#define Ncyl 6.0      //6 форсунок
+#define Ninjection 1  //впрыск 1 раз за цикл
 //DEFINE пинов под входы-выходы
 #define LED_PIN          13
 #define ENGINE_DATA_PIN 2 //VF1 PIN
@@ -65,27 +66,32 @@ SdFile file;
 
 MD_KeySwitch S(TOGGLE_BTN_PIN, HIGH);
 byte CurrentDisplayIDX = 1;
-float total_consumption_obd_ee = 0, current_consumption_obd = 0;
 float current_run = 0;
 float total_run = 0;
-float total_avg_consumption;
-float avg_consumption_inj;
+
+
 float total_avg_speed;
 float avg_speed;
 unsigned long current_time = 0;
 unsigned long total_time = 0;
 unsigned long t;
-float total_duration_inj;
-float current_duration_inj;
+float current_duration_inj, cycle_obd_inj_dur, trip_inj_dur, total_inj_dur, trip_fuel_consumption,
+      total_fuel_consumption, trip_avg_fuel_consumption, total_avg_fuel_consumption; //по обд протоколу
+float LPK, LPH;
 bool flagNulSpeed = true;
 #if defined(INJECTOR)
+//по сигналу с форсунок
 volatile unsigned long Injector_Open_Duration = 0;
 volatile unsigned long INJ_TIME = 0;
 volatile unsigned long InjectorTime1 = 0;
 volatile unsigned long InjectorTime2 = 0;
+float total_avg_consumption;
+float avg_consumption_inj;
+float total_duration_inj;
+float total_consumption_inj, current_consumption_inj;
 #endif
 
-float total_consumption_inj, current_consumption_inj;
+
 volatile uint8_t ToyotaNumBytes, ToyotaID, ToyotaData[TOYOTA_MAX_BYTES];
 volatile uint16_t ToyotaFailBit = 0;
 
@@ -102,8 +108,8 @@ void setup() {
   Serial.begin(115200);
   EEPROM.get(104, total_run);
   EEPROM.get(108, total_time);
-  EEPROM.get(200, total_duration_inj);
-  // EEPROM.get(204, total_obd_inj_dur_ee);
+  EEPROM.get(200, total_inj_dur);
+  EEPROM.get(204, trip_inj_dur);
   // EEPROM.get(208, total_closed_duration);
 
   S.begin();
@@ -119,7 +125,7 @@ void setup() {
     Serial.print("Read float from EEPROM: ");
     Serial.println(total_run, 3);
     Serial.println(total_time, 3);
-    Serial.println(total_duration_inj, 3);
+    Serial.println(total_avg_fuel_consumption, 3);
     //   Serial.println(total_obd_inj_dur_ee, 3);
   }
   ////////////////////////////////////////////////////////////////////////////////////////////
@@ -165,8 +171,8 @@ void setup() {
   //Расходомер
   EEPROM.get(104, total_run);
   EEPROM.get(108, total_time);
-  EEPROM.get(200, total_duration_inj);
-  //  EEPROM.get(204, total_obd_inj_dur_ee);
+  EEPROM.get(200, total_inj_dur);
+  EEPROM.get(204, trip_inj_dur);
   // EEPROM.get(208, total_closed_duration);
 
   t = millis();
@@ -198,17 +204,31 @@ void loop(void) {
     new_t = millis();
     if (new_t > t) {
       diff_t = new_t - t;
-
+      cycle_obd_inj_dur = getOBDdata(OBD_RPM)  * Ncyl * Ninjection * (float)diff_t  * getOBDdata(OBD_INJ) / 120000.0; //Время открытых форсунок за 1 такт данных. В МС
+      //форсунка срабатывает раз в 2 оборота КВ
+      //время цикла мс в с. Получаем кол-во срабатываний за время цикла. Умножаем на время открытия форсунки, получаем время открытия 6 форсунок В МИЛЛИСЕКУНДАХ
       current_run += (float)diff_t / 3600000 * getOBDdata(OBD_SPD);  //Пройденное расстояние с момента включения. В КМ
       total_run += (float)diff_t / 3600000 * getOBDdata(OBD_SPD);    //Полное пройденное расстояние. EEPROM. В КМ
-
+      trip_inj_dur += cycle_obd_inj_dur;                                                              //Время открытых форсунок за поездку        В МС
+      total_inj_dur += cycle_obd_inj_dur;                                                           //Время открытых форсунок за все время. EEPROM    В МС
       total_time += diff_t;                         //полное пройденное время в миллисекундах лимит ~49 суток. EEPROM
       current_time += diff_t;             //Время в пути в миллисекундах с момента включения
 
       total_avg_speed = total_run / (float)total_time * 3600000;           // средняя скорость за все время. км\ч
       avg_speed = current_run / (float)current_time * 3600000 ;       //average speed
+      trip_fuel_consumption = trip_inj_dur  * Ls / 1000.0;    //потребление топлива за поездку в литрах
+      total_fuel_consumption = total_inj_dur  * Ls / 1000.0;  //потребление топлива за все время. Из ЕЕПРОМ в литрах
+      trip_avg_fuel_consumption = 100.0 * trip_fuel_consumption / current_run; //средний расход за поездку
+      total_avg_fuel_consumption = 100.0 * total_fuel_consumption / total_run;
+      LPK = 100 / getOBDdata(OBD_SPD) * (getOBDdata(OBD_INJ) * getOBDdata(OBD_RPM) * Ls * 0.18);
+      LPH = getOBDdata(OBD_INJ) * getOBDdata(OBD_RPM) * Ls * 0.18;
+
+
+#if defined(INJECTOR)
+      //по сигналу с форсунок
       total_avg_consumption = 100 * total_consumption_inj / total_run;
       avg_consumption_inj = 100 * current_consumption_inj / current_run; //average l/100km for unleaded fuel     //вроде норм
+#endif
       t = millis();
     }
     drawScreenSelector(); // draw screen
@@ -218,8 +238,8 @@ void loop(void) {
   if (getOBDdata(OBD_SPD) == 0 && flagNulSpeed == false)  {   //Запись данных в еепром когда остановка авто
     EEPROM.put(104, total_run);
     EEPROM.put(108, total_time);
-    EEPROM.put(200, total_duration_inj);
-    // EEPROM.put(204, total_obd_inj_dur_ee);
+    EEPROM.put(200, total_inj_dur);
+    EEPROM.put(204, trip_inj_dur);
     //  EEPROM.put(208, total_closed_duration);
     flagNulSpeed = true;                                  //запрет повторной записи
   }
@@ -242,8 +262,8 @@ void cleardata() {
   }
   EEPROM.get(104, total_run);
   EEPROM.get(108, total_time);
-  EEPROM.get(200, total_duration_inj);
-  // EEPROM.get(204, total_obd_inj_dur_ee);
+  EEPROM.get(200, total_inj_dur);
+  EEPROM.get(204, trip_inj_dur);
   // EEPROM.get(208, total_closed_duration);
 
 }
@@ -323,27 +343,27 @@ void DrawCurrentFuelConsuption(void) {
     u8g.drawStr( 106, 15, "L" );
     if (LoggingOn == true) u8g.drawStr( 119, 15, "#" );
     u8g.setPrintPos(59, 15) ;
-    u8g.print(current_consumption_inj, 1);
+    u8g.print(trip_fuel_consumption, 1);
     if (getOBDdata(OBD_SPD) > 1)
     {
       u8g.setFont(u8g_font_profont15r);
       u8g.drawStr( 0, 42, "L/100Km" );
       u8g.setFont(u8g_font_profont22r);
       u8g.setPrintPos(0, 60) ;
-      u8g.print( 100 / getOBDdata(OBD_SPD) * (getOBDdata(OBD_INJ) * getOBDdata(OBD_RPM)*Ls * 0.18), 1);
+      u8g.print( LPK, 1);
     } else {
       u8g.setFont(u8g_font_profont15r);
       u8g.drawStr( 0, 42, "L/Hour" );
       u8g.setFont(u8g_font_profont22r);
       u8g.setPrintPos(0, 60) ;
-      u8g.print(getOBDdata(OBD_INJ) * getOBDdata(OBD_RPM)*Ls * 0.18, 1);
+      u8g.print(LPH, 1);
     }
     u8g.setFont(u8g_font_profont15r);
     u8g.drawStr( 60, 42, "Average" );
     u8g.setFont(u8g_font_profont22r);
     u8g.setPrintPos(60, 60) ;
-    if (avg_consumption_inj < 100)
-      u8g.print( avg_consumption_inj, 1);
+    if (trip_avg_fuel_consumption < 100)
+      u8g.print( trip_avg_fuel_consumption, 1);
     else u8g.drawStr( 60, 60, "---" );
   }
   while ( u8g.nextPage() );
@@ -358,27 +378,27 @@ void DrawTotalFuelConsuption(void) {
     u8g.drawStr( 90, 15, "L" );
     if (LoggingOn == true) u8g.drawStr( 119, 15, "#" );
     u8g.setPrintPos(44, 15) ;
-    u8g.print(total_consumption_inj, 1);
+    u8g.print(total_fuel_consumption, 1);
     if (getOBDdata(OBD_SPD) > 1)
     {
       u8g.setFont(u8g_font_profont15r);
       u8g.drawStr( 0, 42, "L/100Km" );
       u8g.setFont(u8g_font_profont22r);
       u8g.setPrintPos(0, 60) ;
-      u8g.print( 100 / getOBDdata(OBD_SPD) * (getOBDdata(OBD_INJ) * getOBDdata(OBD_RPM)*Ls * 0.18), 1);
+      u8g.print( LPK, 1);
     } else {
       u8g.setFont(u8g_font_profont15r);
       u8g.drawStr( 0, 42, "L/Hour" );
       u8g.setFont(u8g_font_profont22r);
       u8g.setPrintPos(0, 60) ;
-      u8g.print(getOBDdata(OBD_INJ) * getOBDdata(OBD_RPM)*Ls * 0.18, 1);
+      u8g.print(LPH, 1);
     }
     u8g.setFont(u8g_font_profont15r);
     u8g.drawStr( 60, 42, "Average" );
     u8g.setFont(u8g_font_profont22r);
     u8g.setPrintPos(60, 60) ;
-    if (avg_consumption_inj < 100)
-      u8g.print( total_avg_consumption, 1);
+    if (trip_avg_fuel_consumption < 100)
+      u8g.print( total_avg_fuel_consumption, 1);
     else u8g.drawStr( 60, 60, "---" );
   }
   while ( u8g.nextPage() );
