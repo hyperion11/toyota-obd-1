@@ -8,5 +8,5 @@ http://www.carina-e.ru/viewtopic.php?f=6&t=1145
 https://corona-club.ru/
 проделали огромную работу по расшифровке протокола. 
 
-[![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)]https://paypal.me/alekseydegtyarev1986
+[![paypal](https://www.paypalobjects.com/en_US/i/btn/btn_donateCC_LG.gif)](https://paypal.me/alekseydegtyarev1986)
 
