@@ -1,16 +1,16 @@
 void ReadEEPROM(){
   EEPROM.get(104, total_run);
   EEPROM.get(108, total_time);
-  EEPROM.get(200, total_inj_dur);
-  EEPROM.get(204, trip_inj_dur);
+  EEPROM.get(200, total_obd_inj_dur);
+  EEPROM.get(204, trip_obd_inj_dur);
   // EEPROM.get(208, total_closed_duration);
  }
 
 void SaveEEPROM(){
     EEPROM.put(104, total_run);
     EEPROM.put(108, total_time);
-    EEPROM.put(200, total_inj_dur);
-    EEPROM.put(204, trip_inj_dur);
+    EEPROM.put(200, total_obd_inj_dur);
+    EEPROM.put(204, trip_obd_inj_dur);
     //  EEPROM.put(208, total_closed_duration);
 }
 

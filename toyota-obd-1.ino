@@ -9,17 +9,31 @@
 #include <EEPROM.h>
 #include <MD_KeySwitch.h>
 #include "DEFINES.h"
+#define Ls 0.003965888 //производительсность форсунки литров в секунду // базовый 0.004 или 240cc
+
 //#define SDCARD //закомментировать если не нужен функционал логирования на SD карту.
 //обязательно закомментировать если не подключен SD модуль. Иначе программа будет не стартовать.
-//#define INJECTOR //чтение сигнала с форсунок. Как показала практика расход по ОБД считается достаточно точно. Смысла использовать сигнал с форсунок нету.
+#define INJECTOR //чтение сигнала с форсунок. Как показала практика расход по ОБД считается достаточно точно. Смысла использовать сигнал с форсунок нету.
 //#define LOGGING_FULL    //Запись на SD всех данных
 #define DEBUG_OUTPUT true // for debug option - swith output to Serial
 //DEFINE пинов под входы-выходы
 #define LED_PIN          13
 #define ENGINE_DATA_PIN 2 //VF1 PIN
 #define TOGGLE_BTN_PIN 4 //screen change PIN
+#if defined(INJECTOR)
+#define INJECTOR_PIN 3 //engine injector PIN
+volatile unsigned long Injector_Open_Duration = 0;
+volatile unsigned long INJ_TIME = 0;
+volatile unsigned long InjectorTime1 = 0;
+volatile unsigned long InjectorTime2 = 0;
+float total_duration_inj, current_duration_inj;
+float total_consumption_inj, current_consumption_inj;
+#endif
+
+
+
+
 //DEFINE констант расходомера
-#define Ls 0.003965888 //производительсность форсунки литров в секунду // базовый 0.004 или 240cc
 
 U8GLIB_SSD1306_128X64 u8g(U8G_I2C_OPT_NONE);
 #if defined(SDCARD)
@@ -36,13 +50,15 @@ float avg_speed;
 unsigned long current_time = 0;
 unsigned long total_time = 0;
 unsigned long t;
-float current_duration_inj, cycle_obd_inj_dur, trip_inj_dur, total_inj_dur, trip_fuel_consumption,
-      total_fuel_consumption, trip_avg_fuel_consumption, total_avg_fuel_consumption; //по обд протоколу
+float  cycle_obd_inj_dur, trip_obd_inj_dur, total_obd_inj_dur, trip_obd_fuel_consumption,
+       total_obd_fuel_consumption, trip_obd_avg_fuel_consumption, total_obd_avg_fuel_consumption; //по обд протоколу
+
+
 float LPK, LPH;
 bool flagNulSpeed = true;
 volatile uint8_t ToyotaNumBytes, ToyotaID, ToyotaData[TOYOTA_MAX_BYTES];
 volatile uint16_t ToyotaFailBit = 0;
-boolean LoggingOn = false; 
+boolean LoggingOn = false;
 
 void setup() {
 #if defined(SDCARD)
@@ -64,7 +80,7 @@ void setup() {
     Serial.print("Read float from EEPROM: ");
     Serial.println(total_run, 3);
     Serial.println(total_time, 3);
-    Serial.println(total_avg_fuel_consumption, 3);
+    Serial.println(total_obd_avg_fuel_consumption, 3);
     //   Serial.println(total_obd_inj_dur_ee, 3);
   }
 #if defined(SDCARD)
@@ -109,22 +125,22 @@ void loop(void) {
       //время цикла мс в с. Получаем кол-во срабатываний за время цикла. Умножаем на время открытия форсунки, получаем время открытия 6 форсунок В МИЛЛИСЕКУНДАХ
       current_run += (float)diff_t / 3600000 * getOBDdata(OBD_SPD);  //Пройденное расстояние с момента включения. В КМ
       total_run += (float)diff_t / 3600000 * getOBDdata(OBD_SPD);    //Полное пройденное расстояние. EEPROM. В КМ
-      trip_inj_dur += cycle_obd_inj_dur;                                                              //Время открытых форсунок за поездку        В МС
-      total_inj_dur += cycle_obd_inj_dur;                                                           //Время открытых форсунок за все время. EEPROM    В МС
+      trip_obd_inj_dur += cycle_obd_inj_dur;                                                              //Время открытых форсунок за поездку        В МС
+      total_obd_inj_dur += cycle_obd_inj_dur;                                                           //Время открытых форсунок за все время. EEPROM    В МС
       total_time += diff_t;                         //полное пройденное время в миллисекундах лимит ~49 суток. EEPROM
       current_time += diff_t;             //Время в пути в миллисекундах с момента включения
       total_avg_speed = total_run / (float)total_time * 3600000;           // средняя скорость за все время. км\ч
       avg_speed = current_run / (float)current_time * 3600000 ;       //average speed
-      trip_fuel_consumption = trip_inj_dur  * Ls / 1000.0;    //потребление топлива за поездку в литрах
-      total_fuel_consumption = total_inj_dur  * Ls / 1000.0;  //потребление топлива за все время. Из ЕЕПРОМ в литрах
-      trip_avg_fuel_consumption = 100.0 * trip_fuel_consumption / current_run; //средний расход за поездку
-      total_avg_fuel_consumption = 100.0 * total_fuel_consumption / total_run;
+      trip_obd_fuel_consumption = trip_obd_inj_dur  * Ls / 1000.0;    //потребление топлива за поездку в литрах
+      total_obd_fuel_consumption = total_obd_inj_dur  * Ls / 1000.0;  //потребление топлива за все время. Из ЕЕПРОМ в литрах
+      trip_obd_avg_fuel_consumption = 100.0 * trip_obd_fuel_consumption / current_run; //средний расход за поездку
+      total_obd_avg_fuel_consumption = 100.0 * total_obd_fuel_consumption / total_run;
       LPK = 100 / getOBDdata(OBD_SPD) * (getOBDdata(OBD_INJ) * getOBDdata(OBD_RPM) * Ls * 0.18);
       LPH = getOBDdata(OBD_INJ) * getOBDdata(OBD_RPM) * Ls * 0.18;
 #if defined(INJECTOR)
       //по сигналу с форсунок
-      total_avg_consumption = 100 * total_consumption_inj / total_run;
-      avg_consumption_inj = 100 * current_consumption_inj / current_run; //average l/100km for unleaded fuel     //вроде норм
+     // total_avg_consumption = 100 * total_consumption_inj / total_run;
+     // avg_consumption_inj = 100 * current_consumption_inj / current_run; //average l/100km for unleaded fuel     //вроде норм
 #endif
       t = millis();
     }

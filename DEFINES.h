@@ -27,13 +27,6 @@
 
 #if defined(INJECTOR)
 //по сигналу с форсунок
-volatile unsigned long Injector_Open_Duration = 0;
-volatile unsigned long INJ_TIME = 0;
-volatile unsigned long InjectorTime1 = 0;
-volatile unsigned long InjectorTime2 = 0;
-float total_avg_consumption;
-float avg_consumption_inj;
-float total_duration_inj;
-float total_consumption_inj, current_consumption_inj;
-#define INJECTOR_PIN 3 // Номер ноги для форсунки
+
+
 #endif

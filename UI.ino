@@ -77,7 +77,7 @@ void DrawCurrentFuelConsuption(void) {
     u8g.drawStr( 106, 15, "L" );
     if (LoggingOn == true) u8g.drawStr( 119, 15, "#" );
     u8g.setPrintPos(59, 15) ;
-    u8g.print(trip_fuel_consumption, 1);
+    u8g.print(trip_obd_fuel_consumption, 1);
     if (getOBDdata(OBD_SPD) > 1)
     {
       u8g.setFont(u8g_font_profont15r);
@@ -96,8 +96,8 @@ void DrawCurrentFuelConsuption(void) {
     u8g.drawStr( 60, 42, "Average" );
     u8g.setFont(u8g_font_profont22r);
     u8g.setPrintPos(60, 60) ;
-    if (trip_avg_fuel_consumption < 100)
-      u8g.print( trip_avg_fuel_consumption, 1);
+    if (trip_obd_avg_fuel_consumption < 100)
+      u8g.print( trip_obd_avg_fuel_consumption, 1);
     else u8g.drawStr( 60, 60, "---" );
   }
   while ( u8g.nextPage() );
@@ -112,7 +112,7 @@ void DrawTotalFuelConsuption(void) {
     u8g.drawStr( 90, 15, "L" );
     if (LoggingOn == true) u8g.drawStr( 119, 15, "#" );
     u8g.setPrintPos(44, 15) ;
-    u8g.print(total_fuel_consumption, 1);
+    u8g.print(total_obd_fuel_consumption, 1);
     if (getOBDdata(OBD_SPD) > 1)
     {
       u8g.setFont(u8g_font_profont15r);
@@ -131,8 +131,8 @@ void DrawTotalFuelConsuption(void) {
     u8g.drawStr( 60, 42, "Average" );
     u8g.setFont(u8g_font_profont22r);
     u8g.setPrintPos(60, 60) ;
-    if (trip_avg_fuel_consumption < 100)
-      u8g.print( total_avg_fuel_consumption, 1);
+    if (trip_obd_avg_fuel_consumption < 100)
+      u8g.print( total_obd_avg_fuel_consumption, 1);
     else u8g.drawStr( 60, 60, "---" );
   }
   while ( u8g.nextPage() );
