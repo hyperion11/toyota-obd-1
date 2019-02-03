@@ -26,8 +26,11 @@ volatile unsigned long Injector_Open_Duration = 0;
 volatile unsigned long INJ_TIME = 0;
 volatile unsigned long InjectorTime1 = 0;
 volatile unsigned long InjectorTime2 = 0;
-float total_duration_inj, current_duration_inj;
-float total_consumption_inj, current_consumption_inj;
+volatile uint32_t num_injection = 0;
+volatile uint16_t rpm_inj = 0;
+volatile float total_duration_inj, current_duration_inj;
+volatile float total_consumption_inj, current_consumption_inj;
+volatile uint32_t current_time_inj, total_time_inj;
 #endif
 
 
@@ -49,12 +52,13 @@ float total_avg_speed;
 float avg_speed;
 unsigned long current_time = 0;
 unsigned long total_time = 0;
-unsigned long t;
+
+volatile float total_duration_inj
 float  cycle_obd_inj_dur, trip_obd_inj_dur, total_obd_inj_dur, trip_obd_fuel_consumption,
        total_obd_fuel_consumption, trip_obd_avg_fuel_consumption, total_obd_avg_fuel_consumption; //по обд протоколу
 
 
-float LPK, LPH;
+float LPK, LPH, LPH_INJ;
 bool flagNulSpeed = true;
 volatile uint8_t ToyotaNumBytes, ToyotaID, ToyotaData[TOYOTA_MAX_BYTES];
 volatile uint16_t ToyotaFailBit = 0;
@@ -120,7 +124,7 @@ void loop(void) {
     new_t = millis();
     if (new_t > t) {
       diff_t = new_t - t;
-      cycle_obd_inj_dur = getOBDdata(OBD_RPM)  * Ncyl * Ninjection * (float)diff_t  * getOBDdata(OBD_INJ) / 120000.0; //Время открытых форсунок за 1 такт данных. В МС
+      cycle_obd_inj_dur = getOBDdata(OBD_RPM) / 60000.0  * Ncyl * Ninjection * (float)diff_t  * getOBDdata(OBD_INJ) / 2.0; //Время открытых форсунок за 1 такт данных. В МС
       //форсунка срабатывает раз в 2 оборота КВ
       //время цикла мс в с. Получаем кол-во срабатываний за время цикла. Умножаем на время открытия форсунки, получаем время открытия 6 форсунок В МИЛЛИСЕКУНДАХ
       current_run += (float)diff_t / 3600000 * getOBDdata(OBD_SPD);  //Пройденное расстояние с момента включения. В КМ
@@ -137,13 +141,13 @@ void loop(void) {
       total_obd_avg_fuel_consumption = 100.0 * total_obd_fuel_consumption / total_run;
       LPK = 100 / getOBDdata(OBD_SPD) * (getOBDdata(OBD_INJ) * getOBDdata(OBD_RPM) * Ls * 0.18);
       LPH = getOBDdata(OBD_INJ) * getOBDdata(OBD_RPM) * Ls * 0.18;
-#if defined(INJECTOR)
-      //по сигналу с форсунок
-     // total_avg_consumption = 100 * total_consumption_inj / total_run;
-     // avg_consumption_inj = 100 * current_consumption_inj / current_run; //average l/100km for unleaded fuel     //вроде норм
-#endif
       t = millis();
     }
+#if defined(INJECTOR)
+    //по сигналу с форсунок
+    // total_avg_consumption = 100 * total_consumption_inj / total_run;
+    // avg_consumption_inj = 100 * current_consumption_inj / current_run; //average l/100km for unleaded fuel     //вроде норм
+#endif
     drawScreenSelector(); // draw screen
     ToyotaNumBytes = 0;     // reset the counter.
   } // end if (ToyotaNumBytes > 0)
